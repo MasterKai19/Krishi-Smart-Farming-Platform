@@ -1,0 +1,22 @@
+<?php
+$id=filter_var($_POST['scheme_id']??null,FILTER_VALIDATE_INT);
+$cycleId=filter_var($_POST['cycle_id']??null,FILTER_VALIDATE_INT);
+if(!$id || !$cycleId)throw new RuntimeException('Choose a scheme and a registered land crop season.');
+$note=land_optional('farmer_note',500);
+db()->beginTransaction();
+query('SELECT id FROM farmers WHERE id=? FOR UPDATE',[$me['id']]);
+$cycle=query('SELECT c.* FROM crop_cycles c JOIN lands l ON l.id=c.land_id WHERE c.id=? AND l.farmer_id=? AND l.archived=0 FOR UPDATE',[$cycleId,$me['id']])->fetch();
+if(!$cycle)throw new RuntimeException('Choose an active land and crop season belonging to you.');
+$land=land_record((int)$cycle['land_id'],$me);
+$scheme=query('SELECT * FROM schemes WHERE id=? FOR UPDATE',[$id])->fetch();
+if(!$scheme || $scheme['status']!=='active')throw new RuntimeException('This scheme is not open for applications.');
+if($scheme['district_code'] && $scheme['district_code']!==$land['district_code'])throw new RuntimeException('This scheme does not cover the selected land district.');
+$total=query('SELECT SUM(area_sqft)/720 FROM lands WHERE farmer_id=?',[$me['id']])->fetchColumn();
+if((float)$total>9999999.99)throw new RuntimeException('Your registered area exceeds the supported application limit. Contact the administrator.');
+if($scheme['max_land_katha']!==null && (float)$total>=(float)$scheme['max_land_katha'])throw new RuntimeException('Your total registered land area does not meet this scheme limit. Archived lands also count.');
+if(query('SELECT id FROM scheme_applications WHERE scheme_id=? AND farmer_id=?',[$id,$me['id']])->fetch())throw new RuntimeException('You have already applied for this scheme.');
+$snapshot=land_snapshot($land,$cycle);
+query('INSERT INTO scheme_applications(scheme_id,farmer_id,land_katha_snapshot,farmer_note) VALUES (?,?,?,?)',[$id,$me['id'],$total,$note]);
+$applicationId=db()->lastInsertId();
+query('INSERT INTO scheme_application_land(application_id,cycle_id,district_code,snapshot_json) VALUES (?,?,?,?)',[$applicationId,$cycleId,$land['district_code'],json_encode($snapshot,JSON_THROW_ON_ERROR)]);
+db()->commit();flash('Application sent with a saved land and expense summary to an officer in the land’s district.');go('index.php?page=schemes');

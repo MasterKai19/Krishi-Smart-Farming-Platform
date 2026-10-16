@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS appointment_photos (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ appointment_id INT UNSIGNED NOT NULL UNIQUE,
+ storage_name VARCHAR(52) NOT NULL UNIQUE,
+ mime_type VARCHAR(30) NOT NULL,
+ byte_size INT UNSIGNED NOT NULL,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ CONSTRAINT fk_photo_appointment FOREIGN KEY (appointment_id) REFERENCES appointments(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
